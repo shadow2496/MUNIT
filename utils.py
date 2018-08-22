@@ -39,6 +39,7 @@ import time
 def get_all_data_loaders(conf):
     batch_size = conf['batch_size']
     num_workers = conf['num_workers']
+    # new_size_a and new_size_b are needed for resizing images.
     if 'new_size' in conf:
         new_size_a = new_size_b = conf['new_size']
     else:
@@ -83,6 +84,8 @@ def get_data_loader_list(root, file_list, batch_size, train, new_size=None,
 
 def get_data_loader_folder(input_folder, batch_size, train, new_size=None,
                            height=256, width=256, num_workers=4, crop=True):
+    # Change the range [0, 255] into [0.0, 1.0],
+    # and widen it to [-1.0, 1.0] using the normalization function.
     transform_list = [transforms.ToTensor(),
                       transforms.Normalize((0.5, 0.5, 0.5),
                                            (0.5, 0.5, 0.5))]
@@ -91,6 +94,7 @@ def get_data_loader_folder(input_folder, batch_size, train, new_size=None,
     transform_list = [transforms.RandomHorizontalFlip()] + transform_list if train else transform_list
     transform = transforms.Compose(transform_list)
     dataset = ImageFolder(input_folder, transform=transform)
+    # Train data will be reshuffled at every epoch and the last incomplete batch won't be used.
     loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=train, drop_last=True, num_workers=num_workers)
     return loader
 
@@ -223,8 +227,10 @@ def load_vgg16(model_dir):
     if not os.path.exists(os.path.join(model_dir, 'vgg16.weight')):
         if not os.path.exists(os.path.join(model_dir, 'vgg16.t7')):
             os.system('wget https://www.dropbox.com/s/76l3rt4kyi3s8x7/vgg16.t7?dl=1 -O ' + os.path.join(model_dir, 'vgg16.t7'))
+        # What does load_lua() do? (SHOULD REMEMBER)
         vgglua = load_lua(os.path.join(model_dir, 'vgg16.t7'))
         vgg = Vgg16()
+        # Load the model data from 'vgg16.t7' and save it as 'vgg16.weight'.
         for (src, dst) in zip(vgglua.parameters()[0], vgg.parameters()):
             dst.data[:] = src
         torch.save(vgg.state_dict(), os.path.join(model_dir, 'vgg16.weight'))
@@ -250,6 +256,8 @@ def get_scheduler(optimizer, hyperparameters, iterations=-1):
     if 'lr_policy' not in hyperparameters or hyperparameters['lr_policy'] == 'constant':
         scheduler = None # constant scheduler
     elif hyperparameters['lr_policy'] == 'step':
+        # hyperparameters['step_size'] is the frequency of learning rate decay,
+        # and hyperparameters['gamma'] is the multiplicative factor of learning rate decay.
         scheduler = lr_scheduler.StepLR(optimizer, step_size=hyperparameters['step_size'],
                                         gamma=hyperparameters['gamma'], last_epoch=iterations)
     else:
