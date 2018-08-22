@@ -20,6 +20,7 @@ import shutil
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, default='configs/edges2handbags_folder.yaml', help='Path to the config file.')
 parser.add_argument('--output_path', type=str, default='.', help="outputs path")
+# The value is True when it is mentioned with the default value of False.
 parser.add_argument("--resume", action="store_true")
 parser.add_argument('--trainer', type=str, default='MUNIT', help="MUNIT|UNIT")
 opts = parser.parse_args()
@@ -41,12 +42,14 @@ else:
     sys.exit("Only support MUNIT|UNIT")
 trainer.cuda()
 train_loader_a, train_loader_b, test_loader_a, test_loader_b = get_all_data_loaders(config)
+# Concatenate display_size number of images for debugging.
 train_display_images_a = torch.stack([train_loader_a.dataset[i] for i in range(display_size)]).cuda()
 train_display_images_b = torch.stack([train_loader_b.dataset[i] for i in range(display_size)]).cuda()
 test_display_images_a = torch.stack([test_loader_a.dataset[i] for i in range(display_size)]).cuda()
 test_display_images_b = torch.stack([test_loader_b.dataset[i] for i in range(display_size)]).cuda()
 
 # Setup logger and output folders
+# The default value of model_name is "edges2handbags_folder".
 model_name = os.path.splitext(os.path.basename(opts.config))[0]
 train_writer = tensorboardX.SummaryWriter(os.path.join(opts.output_path + "/logs", model_name))
 output_directory = os.path.join(opts.output_path + "/outputs", model_name)
@@ -58,12 +61,14 @@ iterations = trainer.resume(checkpoint_directory, hyperparameters=config) if opt
 while True:
     for it, (images_a, images_b) in enumerate(zip(train_loader_a, train_loader_b)):
         trainer.update_learning_rate()
+        # Make images_a and images_b be detached from its current graph.
         images_a, images_b = images_a.cuda().detach(), images_b.cuda().detach()
 
         with Timer("Elapsed time in update: %f"):
             # Main training code
             trainer.dis_update(images_a, images_b, config)
             trainer.gen_update(images_a, images_b, config)
+            # Wait for all kernels in all streams on current device to complete.
             torch.cuda.synchronize()
 
         # Dump training stats in log file
