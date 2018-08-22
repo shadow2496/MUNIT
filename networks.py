@@ -35,16 +35,21 @@ class MsImageDis(nn.Module):
     def _make_net(self):
         dim = self.dim
         cnn_x = []
+        # Change the shape of translated images from [batch_size, 3, 256, 256] to [batch_size, 64, 128, 128].
         cnn_x += [Conv2dBlock(self.input_dim, dim, 4, 2, 1, norm='none', activation=self.activ, pad_type=self.pad_type)]
+        # Change the shape of translated images from [batch_size, 64, 128, 128] to [batch_size, 512, 16, 16].
         for i in range(self.n_layer - 1):
             cnn_x += [Conv2dBlock(dim, dim * 2, 4, 2, 1, norm=self.norm, activation=self.activ, pad_type=self.pad_type)]
             dim *= 2
+        # Change the shape of translated images from [batch_size, 512, 16, 16] to [batch_size, 1, 16, 16].
         cnn_x += [nn.Conv2d(dim, 1, 1, 1, 0)]
         cnn_x = nn.Sequential(*cnn_x)
         return cnn_x
 
     def forward(self, x):
         outputs = []
+        # Since self.num_scales is 3, shapes of each output are
+        # [batch_size, 1, 16, 16], [batch_size, 1, 8, 8] and [batch_size, 1, 4, 4].
         for model in self.cnns:
             outputs.append(model(x))
             x = self.downsample(x)
@@ -56,6 +61,7 @@ class MsImageDis(nn.Module):
         outs1 = self.forward(input_real)
         loss = 0
 
+        # out0 and out1 are outputs with the same shape.
         for it, (out0, out1) in enumerate(zip(outs0, outs1)):
             if self.gan_type == 'lsgan':
                 loss += torch.mean((out0 - 0)**2) + torch.mean((out1 - 1)**2)
@@ -99,13 +105,18 @@ class AdaINGen(nn.Module):
         mlp_dim = params['mlp_dim']
 
         # style encoder
+        # The shape of style codes is [batch_size, 8, 1, 1].
         self.enc_style = StyleEncoder(4, input_dim, dim, style_dim, norm='none', activ=activ, pad_type=pad_type)
 
         # content encoder
+        # The shape of content codes is [batch_size, 256, 64, 64].
         self.enc_content = ContentEncoder(n_downsample, n_res, input_dim, dim, 'in', activ, pad_type=pad_type)
+        # The shape of translated images is [batch_size, 3, 256, 256].
         self.dec = Decoder(n_downsample, n_res, self.enc_content.output_dim, input_dim, res_norm='adain', activ=activ, pad_type=pad_type)
 
         # MLP to generate AdaIN parameters
+        # self.get_num_adain_params(self.dec) returns 4096. (SHOULD REMEMBER)
+        # The shape of AdaIN parameters is [batch_size, 4096].
         self.mlp = MLP(style_dim, self.get_num_adain_params(self.dec), mlp_dim, 3, norm='none', activ=activ)
 
     def forward(self, images):
@@ -189,13 +200,18 @@ class StyleEncoder(nn.Module):
     def __init__(self, n_downsample, input_dim, dim, style_dim, norm, activ, pad_type):
         super(StyleEncoder, self).__init__()
         self.model = []
+        # Change the shape of images from [batch_size, 3, 256, 256] to [batch_size, 64, 256, 256].
         self.model += [Conv2dBlock(input_dim, dim, 7, 1, 3, norm=norm, activation=activ, pad_type=pad_type)]
+        # Change the shape of images from [batch_size, 64, 256, 256] to [batch_size, 256, 64, 64].
         for i in range(2):
             self.model += [Conv2dBlock(dim, 2 * dim, 4, 2, 1, norm=norm, activation=activ, pad_type=pad_type)]
             dim *= 2
+        # Change the shape of images from [batch_size, 256, 64, 64] to [batch_size, 256, 16, 16].
         for i in range(n_downsample - 2):
             self.model += [Conv2dBlock(dim, dim, 4, 2, 1, norm=norm, activation=activ, pad_type=pad_type)]
+        # Change the shape of images from [batch_size, 256, 16, 16] to [batch_size, 256, 1, 1].
         self.model += [nn.AdaptiveAvgPool2d(1)] # global average pooling
+        # Change the shape of images from [batch_size, 256, 1, 1] to [batch_size, 8, 1, 1].
         self.model += [nn.Conv2d(dim, style_dim, 1, 1, 0)]
         self.model = nn.Sequential(*self.model)
         self.output_dim = dim
@@ -207,8 +223,10 @@ class ContentEncoder(nn.Module):
     def __init__(self, n_downsample, n_res, input_dim, dim, norm, activ, pad_type):
         super(ContentEncoder, self).__init__()
         self.model = []
+        # Change the shape of images from [batch_size, 3, 256, 256] to [batch_size, 64, 256, 256].
         self.model += [Conv2dBlock(input_dim, dim, 7, 1, 3, norm=norm, activation=activ, pad_type=pad_type)]
         # downsampling blocks
+        # Change the shape of images from [batch_size, 64, 256, 256] to [batch_size, 256, 64, 64].
         for i in range(n_downsample):
             self.model += [Conv2dBlock(dim, 2 * dim, 4, 2, 1, norm=norm, activation=activ, pad_type=pad_type)]
             dim *= 2
@@ -228,11 +246,14 @@ class Decoder(nn.Module):
         # AdaIN residual blocks
         self.model += [ResBlocks(n_res, dim, res_norm, activ, pad_type=pad_type)]
         # upsampling blocks
+        # MUNIT doesn't use a transposed convolution layer.
+        # Change the shape of content codes from [batch_size, 256, 64, 64] to [batch_size, 64, 256, 256].
         for i in range(n_upsample):
             self.model += [nn.Upsample(scale_factor=2),
                            Conv2dBlock(dim, dim // 2, 5, 1, 2, norm='ln', activation=activ, pad_type=pad_type)]
             dim //= 2
         # use reflection padding in the last conv layer
+        # Change the shape of content codes from [batch_size, 64, 256, 256] to [batch_size, 3, 256, 256].
         self.model += [Conv2dBlock(dim, output_dim, 7, 1, 3, norm='none', activation='tanh', pad_type=pad_type)]
         self.model = nn.Sequential(*self.model)
 
@@ -258,9 +279,11 @@ class MLP(nn.Module):
 
         super(MLP, self).__init__()
         self.model = []
+        # Change the shape of style codes from [batch_size, 8] to [batch_size, 256].
         self.model += [LinearBlock(input_dim, dim, norm=norm, activation=activ)]
         for i in range(n_blk - 2):
             self.model += [LinearBlock(dim, dim, norm=norm, activation=activ)]
+        # Change the shape of style codes from [batch_size, 256] to [batch_size, 4096].
         self.model += [LinearBlock(dim, output_dim, norm='none', activation='none')] # no output activations
         self.model = nn.Sequential(*self.model)
 
