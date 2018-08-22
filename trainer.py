@@ -14,15 +14,20 @@ class MUNIT_Trainer(nn.Module):
         super(MUNIT_Trainer, self).__init__()
         lr = hyperparameters['lr']
         # Initiate the networks
+        # hyperparameters['input_dim_a'] is the number of image channels in domain a.
+        # hyperparameters['input_dim_b'] is the number of image channels in domain b.
         self.gen_a = AdaINGen(hyperparameters['input_dim_a'], hyperparameters['gen'])  # auto-encoder for domain a
         self.gen_b = AdaINGen(hyperparameters['input_dim_b'], hyperparameters['gen'])  # auto-encoder for domain b
         self.dis_a = MsImageDis(hyperparameters['input_dim_a'], hyperparameters['dis'])  # discriminator for domain a
         self.dis_b = MsImageDis(hyperparameters['input_dim_b'], hyperparameters['dis'])  # discriminator for domain b
         self.instancenorm = nn.InstanceNorm2d(512, affine=False)
+        # self.style_dim is the length of style code.
         self.style_dim = hyperparameters['gen']['style_dim']
 
         # fix the noise used in sampling
         display_size = int(hyperparameters['display_size'])
+        # Returns a tensor filled with numbers from the standard normal distribution
+        # with the shape [display_size, self.style_dim, 1, 1].
         self.s_a = torch.randn(display_size, self.style_dim, 1, 1).cuda()
         self.s_b = torch.randn(display_size, self.style_dim, 1, 1).cuda()
 
@@ -31,14 +36,18 @@ class MUNIT_Trainer(nn.Module):
         beta2 = hyperparameters['beta2']
         dis_params = list(self.dis_a.parameters()) + list(self.dis_b.parameters())
         gen_params = list(self.gen_a.parameters()) + list(self.gen_b.parameters())
+        # What does weight_decay do exactly? (SHOULD REMEMBER)
         self.dis_opt = torch.optim.Adam([p for p in dis_params if p.requires_grad],
                                         lr=lr, betas=(beta1, beta2), weight_decay=hyperparameters['weight_decay'])
         self.gen_opt = torch.optim.Adam([p for p in gen_params if p.requires_grad],
                                         lr=lr, betas=(beta1, beta2), weight_decay=hyperparameters['weight_decay'])
+        # Apply computed learning rates of each step to self.dis_opt and self.get_opt.
         self.dis_scheduler = get_scheduler(self.dis_opt, hyperparameters)
         self.gen_scheduler = get_scheduler(self.gen_opt, hyperparameters)
 
         # Network weight initialization
+        # self itself is nn.Module.
+        # What does self.apply(weights_init('kaiming')) initialize? (SHOULD REMEMBER)
         self.apply(weights_init(hyperparameters['init']))
         self.dis_a.apply(weights_init('gaussian'))
         self.dis_b.apply(weights_init('gaussian'))
@@ -46,6 +55,7 @@ class MUNIT_Trainer(nn.Module):
         # Load VGG model if needed
         if 'vgg_w' in hyperparameters.keys() and hyperparameters['vgg_w'] > 0:
             self.vgg = load_vgg16(hyperparameters['vgg_model_path'] + '/models')
+            # Set self.vgg in evaluation mode.
             self.vgg.eval()
             for param in self.vgg.parameters():
                 param.requires_grad = False
