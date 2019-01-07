@@ -12,20 +12,14 @@ mkdir datasets/celeba/trainA -p
 mkdir datasets/celeba/trainB -p
 mkdir datasets/celeba/testA -p
 mkdir datasets/celeba/testB -p
-awk 'NR>2 && $10 != 1 && $11 == 1 { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_blond_hair.txt
-awk 'NR>2 && $10 == 1 && $11 != 1 { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_black_hair.txt
-NUM_IMAGES=$( cat datasets/celeba/list_blond_hair.txt | wc -l )
-NUM_TESTS=200
-shuf -n $NUM_IMAGES datasets/celeba/list_blond_hair.txt > datasets/celeba/list_attr_celeba.txt
-mv datasets/celeba/list_attr_celeba.txt datasets/celeba/list_blond_hair.txt
-shuf -n $NUM_IMAGES datasets/celeba/list_black_hair.txt > datasets/celeba/list_attr_celeba.txt
-mv datasets/celeba/list_attr_celeba.txt datasets/celeba/list_black_hair.txt
-head -n -$NUM_TESTS datasets/celeba/list_blond_hair.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/trainA/
-head -n -$NUM_TESTS datasets/celeba/list_black_hair.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/trainB/
-tail -n $NUM_TESTS datasets/celeba/list_blond_hair.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/testA/
-tail -n $NUM_TESTS datasets/celeba/list_black_hair.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/testB/
+awk 'NR>2 && ($10 != 1 || $11 == 1 || $13 != 1) { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_blond.txt
+awk 'NR>2 && ($10 == 1 && $11 != 1 && $13 != 1) { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_black.txt
+awk -F. '$1 <= 10000 { print }' datasets/celeba/list_blond.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/testA/
+awk -F. '$1 <= 10000 { print }' datasets/celeba/list_black.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/testB/
+awk -F. '$1 > 10000 { print }' datasets/celeba/list_blond.txt | shuf | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/trainA/
+awk -F. '$1 > 10000 { print }' datasets/celeba/list_black.txt | shuf | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/trainB/
 rm datasets/celeba/CelebA_nocrop -rf
 rm datasets/celeba/images -rf
-rm datasets/celeba/list_blond_hair.txt
-rm datasets/celeba/list_black_hair.txt
+rm datasets/celeba/list_blond.txt
+rm datasets/celeba/list_black.txt
 python train.py --config configs/celeba_folder.yaml
