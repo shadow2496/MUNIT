@@ -12,7 +12,7 @@ mkdir datasets/celeba/trainA -p
 mkdir datasets/celeba/trainB -p
 mkdir datasets/celeba/testA -p
 mkdir datasets/celeba/testB -p
-awk 'NR>2 && ($10 != 1 || $11 == 1 || $13 != 1) { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_blond.txt
+awk 'NR>2 && ($10 != 1 && $11 == 1 && $13 != 1) { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_blond.txt
 awk 'NR>2 && ($10 == 1 && $11 != 1 && $13 != 1) { print $1 }' datasets/celeba/list_attr_celeba.txt > datasets/celeba/list_black.txt
 awk -F. '$1 <= 10000 { print }' datasets/celeba/list_blond.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/testA/
 awk -F. '$1 <= 10000 { print }' datasets/celeba/list_black.txt | xargs -I % mv -v datasets/celeba/images/% datasets/celeba/testB/
